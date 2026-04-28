@@ -1,0 +1,7 @@
+segment_name,Count,Avg_Churn_Prob,Avg_Tenure,Avg_Monthly,Avg_Total,Churn_Rate
+At-Risk Decliners,1308,0.061,44.58,28.91,1248.884,0.064
+Churned Likely,1271,0.655,7.992,82.354,659.564,0.657
+High-Value Loyal,1863,0.269,8.634,38.754,337.571,0.279
+Long-Tenured Stable,1634,0.229,38.056,63.687,2348.726,0.231
+New Explorers,1873,0.12,61.275,92.482,5660.236,0.123
+Price-Sensitive,2051,0.304,34.742,82.445,2806.56,0.285
