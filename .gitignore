@@ -10,7 +10,8 @@ env/
 
 # Data (large files – use DVC or S3)
 data/processed/
-data/raw/*.csv
+# data/raw/*.csv
+!data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv
 
 # Model artifacts (link externally)
 models/
