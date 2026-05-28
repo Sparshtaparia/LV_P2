@@ -19,5 +19,5 @@ ENV PATH="/home/user/.local/bin:$PATH"
 # Hugging Face Spaces binds to port 7860 by default
 EXPOSE 7860
 
-# Start the FastAPI serving app on port 7860
-CMD ["uvicorn", "src.dashboard.api:app", "--host", "0.0.0.0", "--port", "7860"]
+# Run the training pipeline to generate model weights, then start FastAPI on port 7860
+CMD python master_pipeline.py && uvicorn src.dashboard.api:app --host 0.0.0.0 --port 7860
