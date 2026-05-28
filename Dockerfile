@@ -1,22 +1,23 @@
 # syntax=docker/dockerfile:1
-FROM python:3.11-slim AS base
+FROM python:3.11-slim
+
+# Create a non-privileged user (UID 1000) for Hugging Face security compliance
+RUN useradd -m -u 1000 user
 WORKDIR /app
+
+# Pre-install dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# ── Training image ─────────────────────────────────────────────────────────────
-FROM base AS trainer
-COPY . .
-CMD ["python", "master_pipeline.py"]
+# Copy all repository files and change ownership to user
+COPY --chown=user . /app
 
-# ── API image ─────────────────────────────────────────────────────────────────
-FROM base AS api
-COPY . .
-EXPOSE 8000
-CMD ["uvicorn", "src.dashboard.api:app", "--host", "0.0.0.0", "--port", "8000"]
+# Switch to user context
+USER user
+ENV PATH="/home/user/.local/bin:$PATH"
 
-# ── Dashboard image ───────────────────────────────────────────────────────────
-FROM base AS dashboard
-COPY . .
-EXPOSE 8501
-CMD ["streamlit", "run", "src/dashboard/app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+# Hugging Face Spaces binds to port 7860 by default
+EXPOSE 7860
+
+# Start the FastAPI serving app on port 7860
+CMD ["uvicorn", "src.dashboard.api:app", "--host", "0.0.0.0", "--port", "7860"]
