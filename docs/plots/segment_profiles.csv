@@ -1,7 +1,7 @@
 segment_name,Count,Avg_Churn_Prob,Avg_Tenure,Avg_Monthly,Avg_Total,Churn_Rate
-At-Risk Decliners,1713,0.272,37.096,62.69,2268.492,0.233
-Churned Likely,1956,0.115,60.492,92.787,5606.241,0.134
-High-Value Loyal,1482,0.096,45.943,34.291,1531.791,0.09
-Long-Tenured Stable,1678,0.257,8.747,36.363,324.165,0.253
-New Explorers,1988,0.328,30.852,84.238,2556.231,0.321
-Price-Sensitive,1183,0.696,5.741,78.516,463.948,0.655
+At-Risk Decliners,1724,0.099,62.11,94.182,5829.198,0.119
+Churned Likely,1462,0.659,9.651,81.62,783.034,0.667
+High-Value Loyal,1725,0.292,8.112,36.474,292.493,0.264
+Long-Tenured Stable,1716,0.238,37.41,62.64,2288.879,0.228
+New Explorers,1245,0.075,45.568,28.932,1261.719,0.067
+Price-Sensitive,2128,0.238,36.02,81.266,2866.069,0.244
