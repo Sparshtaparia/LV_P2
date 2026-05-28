@@ -3,7 +3,8 @@ title: Churn Api
 emoji: 🐨
 colorFrom: purple
 colorTo: green
-sdk: docker
+sdk: streamlit
+app_file: src/dashboard/app.py
 pinned: false
 ---
 
