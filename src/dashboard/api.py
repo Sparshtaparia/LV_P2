@@ -5,12 +5,17 @@ Endpoints: GET /health | POST /predict | POST /explain | POST /segment
 import sys, os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional, List
 import numpy as np
 import pandas as pd
 import joblib, shap
+import time
+from prometheus_client import make_asgi_app, Counter, Histogram
+
+from src.features.build_features import add_rfm_features, add_behavioral_features, encode_and_scale
+from src.dashboard.auth import get_current_user
 
 from config.config import CALIBRATED_MODEL, FEATURE_COLS_PATH, CLUSTER_MODEL_PATH
 
@@ -19,6 +24,11 @@ app = FastAPI(
     description="Production-grade churn prediction & explainability endpoints",
     version="4.0",
 )
+
+# Prometheus metrics
+app.mount("/metrics", make_asgi_app())
+PREDICTION_COUNTER = Counter("churn_predictions_total", "Total number of predictions made")
+PREDICTION_LATENCY = Histogram("churn_prediction_latency_seconds", "Latency of prediction requests")
 
 # Lazy-load models once at startup
 _model    = None
@@ -59,49 +69,43 @@ class CustomerIn(BaseModel):
 
 def _build_df(c: CustomerIn) -> pd.DataFrame:
     _load()
-    row = {col: 0 for col in _f_cols}
-    # Numeric (z-score approximation using training stats)
-    row["tenure"]          = (c.tenure - 32) / 24
-    row["MonthlyCharges"]  = (c.MonthlyCharges - 64) / 30
-    row["TotalCharges"]    = (c.TotalCharges - 2280) / 2266
-
-    # Contract
-    if c.Contract == "Month-to-month":
-        for k in ["Contract_Month-to-month", "Is_Month_to_Month"]:
-            if k in row: row[k] = 1
-    elif c.Contract == "Two year":
-        for k in ["Contract_Two year", "Is_Two_Year"]:
-            if k in row: row[k] = 1
-
-    # Internet
-    if c.InternetService == "Fiber optic":
-        for k in ["InternetService_Fiber optic", "Has_Fiber"]:
-            if k in row: row[k] = 1
-    elif c.InternetService == "DSL":
-        for k in ["InternetService_DSL", "Has_DSL"]:
-            if k in row: row[k] = 1
-
-    # Security / support
-    for col, val, prefix in [
-        ("OnlineSecurity", c.OnlineSecurity, "OnlineSecurity_"),
-        ("TechSupport",    c.TechSupport,    "TechSupport_"),
-        ("PaymentMethod",  c.PaymentMethod,  "PaymentMethod_"),
-    ]:
-        k = prefix + val
-        if k in row: row[k] = 1
-
-    row["Is_Paperless"]     = 1 if c.PaperlessBilling == "Yes" else 0
-    row["Is_Electronic_Pay"]= 1 if c.PaymentMethod == "Electronic check" else 0
-    row["Is_Senior"]        = c.SeniorCitizen
-    row["Has_Partner"]      = 1 if c.Partner == "Yes" else 0
-    row["Has_Dependents"]   = 1 if c.Dependents == "Yes" else 0
-
-    # Extra features override
+    raw_data = {
+        "tenure": c.tenure,
+        "MonthlyCharges": c.MonthlyCharges,
+        "TotalCharges": c.TotalCharges,
+        "Contract": c.Contract,
+        "InternetService": c.InternetService,
+        "OnlineSecurity": c.OnlineSecurity,
+        "TechSupport": c.TechSupport,
+        "PaperlessBilling": c.PaperlessBilling,
+        "PaymentMethod": c.PaymentMethod,
+        "SeniorCitizen": c.SeniorCitizen,
+        "Partner": c.Partner,
+        "Dependents": c.Dependents,
+        "MultipleLines": "No",
+        "OnlineBackup": "No",
+        "DeviceProtection": "No",
+        "StreamingTV": "No",
+        "StreamingMovies": "No",
+        "TARGET": "No"
+    }
+    
     if c.extra_features:
-        for k, v in c.extra_features.items():
-            if k in row: row[k] = v
-
-    return pd.DataFrame([row])
+        raw_data.update(c.extra_features)
+        
+    df_raw = pd.DataFrame([raw_data])
+    df_raw = add_rfm_features(df_raw)
+    df_raw = add_behavioral_features(df_raw)
+    df_processed = encode_and_scale(df_raw, fit=False)
+    
+    final_row = {}
+    for col in _f_cols:
+        if col in df_processed.columns:
+            final_row[col] = df_processed[col].iloc[0]
+        else:
+            final_row[col] = 0
+            
+    return pd.DataFrame([final_row])
 
 
 @app.get("/health")
@@ -110,11 +114,16 @@ def health():
 
 
 @app.post("/predict")
-def predict(customer: CustomerIn):
+def predict(customer: CustomerIn, user: dict = Depends(get_current_user)):
+    start_time = time.time()
     _load()
     X   = _build_df(customer)
     p   = float(_model.predict_proba(X)[0, 1])
     lbl = int(p >= 0.5)
+    
+    PREDICTION_COUNTER.inc()
+    PREDICTION_LATENCY.observe(time.time() - start_time)
+    
     return {
         "churn_probability": round(p, 4),
         "churn_label":       lbl,
@@ -123,7 +132,7 @@ def predict(customer: CustomerIn):
 
 
 @app.post("/explain")
-def explain(customer: CustomerIn):
+def explain(customer: CustomerIn, user: dict = Depends(get_current_user)):
     _load()
     X = _build_df(customer)
     p = float(_model.predict_proba(X)[0, 1])
@@ -156,7 +165,7 @@ def explain(customer: CustomerIn):
 
 
 @app.post("/segment")
-def segment(customer: CustomerIn):
+def segment(customer: CustomerIn, user: dict = Depends(get_current_user)):
     _load()
     X = _build_df(customer)
     p = float(_model.predict_proba(X)[0, 1])

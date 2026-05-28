@@ -29,6 +29,10 @@ def main():
     log.info("=" * 60)
     from src.models.train_churn import run as train_run
     train_run()
+    
+    log.info("Training Uplift Model (T-Learner)...")
+    from src.models.train_uplift import run as train_uplift_run
+    train_uplift_run()
 
     log.info("=" * 60)
     log.info("STEP 4/5 – Customer Segmentation")

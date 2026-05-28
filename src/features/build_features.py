@@ -22,12 +22,12 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 
 def add_rfm_features(df: pd.DataFrame) -> pd.DataFrame:
     """RFM proxy scores for telecom subscription data."""
-    # Recency proxy: tenure quartile
-    df["Recency_Score"] = pd.qcut(df["tenure"], q=4, labels=[1, 2, 3, 4],
-                                   duplicates="drop").astype(int)
-    # Monetary proxy: TotalCharges quartile
-    df["Monetary_Score"] = pd.qcut(df["TotalCharges"].clip(lower=0), q=4,
-                                    labels=[1, 2, 3, 4], duplicates="drop").astype(int)
+    # Recency proxy: tenure quartile (fixed bins for inference compatibility)
+    df["Recency_Score"] = pd.cut(df["tenure"], bins=[-1, 9, 29, 55, 100], 
+                                 labels=[1, 2, 3, 4]).astype(int)
+    # Monetary proxy: TotalCharges quartile (fixed bins)
+    df["Monetary_Score"] = pd.cut(df["TotalCharges"].clip(lower=0), bins=[-1, 400, 1400, 3800, 10000],
+                                  labels=[1, 2, 3, 4]).astype(int)
     # Frequency proxy: count of activated add-on services
     svc_cols = ["OnlineSecurity", "OnlineBackup", "DeviceProtection",
                 "TechSupport", "StreamingTV", "StreamingMovies"]
@@ -71,16 +71,38 @@ def add_behavioral_features(df: pd.DataFrame) -> pd.DataFrame:
 
     # Simulated support tickets (adds realistic signal correlated with churn)
     np.random.seed(RANDOM_STATE)
-    df["Support_Tickets"] = df[TARGET_COL].apply(
-        lambda c: int(np.random.poisson(3.5 if c == "Yes" else 1.0))
-        if isinstance(c, str) else int(np.random.poisson(1.0))
-    )
+    if "Support_Tickets" not in df.columns:
+        actual_target_col = None
+        for potential_target in [TARGET_COL, "TARGET", "churn_label", "churn"]:
+            if potential_target in df.columns:
+                actual_target_col = potential_target
+                break
+        
+        if actual_target_col is not None:
+            df["Support_Tickets"] = df[actual_target_col].apply(
+                lambda c: int(np.random.poisson(3.5 if str(c).strip().lower() in ["yes", "1", "true"] else 1.0))
+                if pd.notna(c) else int(np.random.poisson(1.0))
+            )
+        else:
+            # For inference when no target is present, generate standard Poisson sample per row (mean=1.0)
+            df["Support_Tickets"] = [int(np.random.poisson(1.0)) for _ in range(len(df))]
+
     df["High_Support_Load"] = (df["Support_Tickets"] >= 4).astype(int)
 
     # Charge change proxy (higher ratio = recent charge spike)
     df["Charge_Per_Tenure_Unit"] = np.where(
         df["tenure"] > 0, df["MonthlyCharges"] / (df["tenure"] + 1), df["MonthlyCharges"]
     )
+    
+    # New Advanced Features (Phase 2 Roadmap)
+    df["Engagement_x_Tenure"] = df["Service_Count"] * df["tenure"]
+    
+    svc_count_safe = np.where(df["Service_Count"] == 0, 1, df["Service_Count"])
+    df["Spend_Intensity"] = df["TotalCharges"] / svc_count_safe
+    
+    tenure_safe = np.where(df["tenure"] == 0, 1, df["tenure"])
+    df["Support_Per_Order"] = df["Support_Tickets"] / tenure_safe
+    
     return df
 
 
@@ -103,7 +125,8 @@ def encode_and_scale(df: pd.DataFrame, fit: bool = True) -> pd.DataFrame:
     # Scale numeric
     num_cols = [c for c in NUMERIC_COLS + ["RFM_Score", "Service_Count",
                 "Monthly_to_Total_Ratio", "Avg_Monthly_Charge",
-                "Charge_Per_Tenure_Unit", "Support_Tickets"]
+                "Charge_Per_Tenure_Unit", "Support_Tickets",
+                "Engagement_x_Tenure", "Spend_Intensity", "Support_Per_Order"]
                 if c in df.columns]
     scaler = StandardScaler()
     if fit:
@@ -134,6 +157,20 @@ def run():
     df.drop(columns=[c for c in drop_cols if c in df.columns], inplace=True)
 
     df.to_csv(MODEL_INPUT_CSV, index=False)
+    
+    # Save parquet for Feast offline store
+    df_feast = df.copy()
+    df_feast["event_timestamp"] = pd.Timestamp.now()
+    if ID_COL not in df_feast.columns:
+        # Assuming ID_COL was preserved or we need to merge it back
+        # For demonstration, generate unique IDs if missing
+        import uuid
+        df_feast[ID_COL] = [str(uuid.uuid4()) for _ in range(len(df_feast))]
+    
+    feast_path = MODEL_INPUT_CSV.with_suffix('.parquet')
+    df_feast.to_parquet(feast_path, index=False)
+    log.info(f"Feast offline store parquet saved -> {feast_path}")
+
     log.info(f"model_input.csv saved  shape={df.shape}")
     log.info(f"Columns ({len(df.columns)}): {list(df.columns)[:10]} ...")
     return df

@@ -13,6 +13,9 @@ import plotly.express as px
 import plotly.graph_objects as go
 import joblib, json
 from io import StringIO
+from st_aggrid import AgGrid, GridOptionsBuilder
+
+from src.features.build_features import add_rfm_features, add_behavioral_features, encode_and_scale
 
 from config.config import (
     PROC_DIR, PLOTS_DIR, CALIBRATED_MODEL, FEATURE_COLS_PATH,
@@ -30,113 +33,81 @@ st.set_page_config(
 # ─── Custom CSS ───────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Inter:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 html, body, [class*="css"] { 
     font-family: 'Inter', sans-serif; 
     color: #e2e8f0;
 }
-h1, h2, h3, h4, h5, h6 {
-    font-family: 'Outfit', sans-serif !important;
-    font-weight: 600 !important;
-}
 
 /* Base backgrounds */
-.main { background: #0b0f19; }
-.stApp { 
-    background-color: #0b0f19;
-    background-image: 
-        radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
-        radial-gradient(at 100% 0%, rgba(168, 85, 247, 0.15) 0px, transparent 50%),
-        radial-gradient(at 100% 100%, rgba(236, 72, 153, 0.1) 0px, transparent 50%);
-    background-attachment: fixed;
-}
+.main { background: #0f111a; }
+.stApp { background-color: #0f111a; }
 
-/* Glassmorphism Metric Cards */
+/* Flat, solid metric cards */
 .metric-card {
-    background: rgba(30, 41, 59, 0.4);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 16px;
-    padding: 24px;
-    text-align: center;
-    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-    transition: transform 0.3s ease, border-color 0.3s ease;
-}
-.metric-card:hover {
-    transform: translateY(-5px);
-    border-color: rgba(99, 102, 241, 0.4);
+    background: #1e222d;
+    border: 1px solid #333a47;
+    border-left: 4px solid #3b82f6; /* Enterprise blue accent */
+    border-radius: 6px;
+    padding: 20px;
+    text-align: left;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
 }
 .metric-card h1 { 
-    font-size: 2.5rem; 
+    font-size: 2.2rem; 
     margin: 0; 
-    font-weight: 700;
-    background: linear-gradient(to right, #818cf8, #c084fc);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    font-family: 'Outfit', sans-serif;
+    font-weight: 600;
+    color: #f8fafc;
 }
 .metric-card p { 
     color: #94a3b8; 
-    margin: 8px 0 0; 
-    font-size: 0.9rem; 
-    font-weight: 500;
+    margin: 4px 0 0; 
+    font-size: 0.85rem; 
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 1px; 
+    letter-spacing: 0.5px; 
 }
 
-/* Risk colors overriding gradient text */
-.metric-card h1.risk-val-high { background: linear-gradient(to right, #ef4444, #f87171); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-.metric-card h1.risk-val-med { background: linear-gradient(to right, #f59e0b, #fbbf24); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-.metric-card h1.risk-val-low { background: linear-gradient(to right, #10b981, #34d399); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+/* Risk colors (solid, no gradients) */
+.metric-card h1.risk-val-high { color: #ef4444; }
+.metric-card h1.risk-val-med { color: #f59e0b; }
+.metric-card h1.risk-val-low { color: #10b981; }
 
 /* Status Badges */
-.risk-high  { color: #ef4444; font-weight: 700; background: rgba(239, 68, 68, 0.1); padding: 2px 8px; border-radius: 4px; }
-.risk-med   { color: #f59e0b; font-weight: 700; background: rgba(245, 158, 11, 0.1); padding: 2px 8px; border-radius: 4px; }
-.risk-low   { color: #10b981; font-weight: 700; background: rgba(16, 185, 129, 0.1); padding: 2px 8px; border-radius: 4px; }
+.risk-high  { color: #ef4444; font-weight: 600; padding: 2px 6px; border: 1px solid #ef4444; border-radius: 4px; }
+.risk-med   { color: #f59e0b; font-weight: 600; padding: 2px 6px; border: 1px solid #f59e0b; border-radius: 4px; }
+.risk-low   { color: #10b981; font-weight: 600; padding: 2px 6px; border: 1px solid #10b981; border-radius: 4px; }
 
-/* Hero Section */
+/* Clean Hero Section */
 .hero {
-    position: relative;
-    overflow: hidden;
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.9), rgba(168, 85, 247, 0.9));
-    padding: 48px 40px;
-    border-radius: 24px;
-    margin-bottom: 36px;
-    box-shadow: 0 20px 40px rgba(99, 102, 241, 0.2);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-}
-.hero-content {
-    position: relative;
-    z-index: 1;
+    background: #161b22;
+    padding: 32px;
+    border-radius: 8px;
+    margin-bottom: 32px;
+    border: 1px solid #30363d;
 }
 .hero h1 { 
-    font-size: 3rem !important; 
-    color: white !important; 
+    font-size: 2.2rem !important; 
+    color: #f0f6fc !important; 
     margin: 0; 
-    line-height: 1.2;
-    text-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    font-weight: 600;
 }
 .hero p  { 
-    color: rgba(255, 255, 255, 0.9); 
-    margin: 12px 0 0; 
-    font-size: 1.2rem; 
-    font-weight: 400;
+    color: #8b949e; 
+    margin: 8px 0 0; 
+    font-size: 1.1rem; 
 }
 
 /* Sidebar styling */
 [data-testid="stSidebar"] {
-    background-color: #0f172a !important;
-    border-right: 1px solid rgba(255, 255, 255, 0.05);
+    background-color: #161b22 !important;
+    border-right: 1px solid #30363d;
 }
 .sidebar-logo { 
-    font-family: 'Outfit', sans-serif;
-    font-size: 1.8rem; 
+    font-size: 1.4rem; 
     font-weight: 700; 
-    background: linear-gradient(to right, #818cf8, #c084fc);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    color: #58a6ff;
     padding: 12px 0 24px; 
     display: flex;
     align-items: center;
@@ -144,31 +115,28 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* Inputs / Native elements */
-.stSelectbox label, .stSlider label { color: #cbd5e1 !important; font-weight: 500 !important; }
+.stSelectbox label, .stSlider label { color: #c9d1d9 !important; font-weight: 500 !important; }
 div[data-testid="stMetric"] { 
-    background: rgba(30, 41, 59, 0.4); 
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 12px; 
+    background: #1e222d; 
+    border: 1px solid #333a47;
+    border-radius: 6px; 
     padding: 16px; 
 }
 [data-testid="stDataFrame"] {
-    border-radius: 12px;
-    overflow: hidden;
-    border: 1px solid rgba(255,255,255,0.05);
+    border: 1px solid #333a47;
+    border-radius: 6px;
 }
 div.stButton > button:first-child {
-    background: linear-gradient(135deg, #6366f1, #a855f7);
+    background: #238636;
     color: white;
-    border: none;
-    border-radius: 8px;
-    padding: 8px 24px;
-    font-weight: 600;
-    transition: all 0.3s ease;
+    border: 1px solid rgba(240, 246, 252, 0.1);
+    border-radius: 6px;
+    padding: 6px 16px;
+    font-weight: 500;
 }
 div.stButton > button:first-child:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(99, 102, 241, 0.4);
+    background: #2ea043;
+    border-color: #8b949e;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -206,7 +174,7 @@ def load_model():
 
 # ─── Sidebar navigation ───────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown('<div class="sidebar-logo">🔮 Churn Intel</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sidebar-logo">Customer Churn Prediction & Retention Intelligence Platform</div>', unsafe_allow_html=True)
     page = st.radio(
         "Navigate",
         ["📊 Overview", "🔍 Customer Risk Table",
@@ -359,10 +327,21 @@ elif page == "🔍 Customer Risk Table":
                                  "Contract","churn_probability","segment_name"]
                     if c in view.columns]
     st.info(f"Showing **{len(view):,}** customers")
-    st.dataframe(
-        view[display_cols].sort_values("churn_probability", ascending=False)
-                          .reset_index(drop=True),
-        use_container_width=True
+    
+    # Use AgGrid instead of st.dataframe
+    grid_data = view[display_cols].sort_values("churn_probability", ascending=False).reset_index(drop=True)
+    gb = GridOptionsBuilder.from_dataframe(grid_data)
+    gb.configure_pagination(paginationAutoPageSize=True)
+    gb.configure_side_bar()
+    gb.configure_default_column(filterable=True, sortable=True)
+    grid_options = gb.build()
+    
+    AgGrid(
+        grid_data,
+        gridOptions=grid_options,
+        enable_enterprise_modules=False,
+        fit_columns_on_grid_load=True,
+        theme="streamlit"
     )
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -438,19 +417,41 @@ elif page == "🔬 What-If Simulator":
         st.subheader("Churn Risk Prediction")
 
         def build_input():
-            row = {c: 0 for c in feat_cols}
-            row["tenure"]         = (tenure - 35) / 25
-            row["MonthlyCharges"] = (monthly_charges - 65) / 30
-            row["TotalCharges"]   = (total_charges - 2000) / 2500
-            row["Is_Month_to_Month_Yes"] = 1 if contract == "Month-to-month" else 0
-            row["Is_Two_Year_Yes"]       = 1 if contract == "Two year" else 0
-            row["Has_Fiber"]             = 1 if internet == "Fiber optic" else 0
-            row["Has_DSL"]               = 1 if internet == "DSL" else 0
-            row["Is_Paperless"]          = 1 if paperless == "Yes" else 0
-            for k in [f"OnlineSecurity_{online_sec}", f"TechSupport_{tech_support}",
-                      f"PaymentMethod_{payment_method}"]:
-                if k in row: row[k] = 1
-            return pd.DataFrame([row])
+            raw_data = {
+                "tenure": tenure,
+                "MonthlyCharges": monthly_charges,
+                "TotalCharges": total_charges,
+                "Contract": contract,
+                "InternetService": internet,
+                "OnlineSecurity": online_sec,
+                "TechSupport": tech_support,
+                "PaperlessBilling": paperless,
+                "PaymentMethod": payment_method,
+                # Defaults for unselected fields
+                "MultipleLines": "No",
+                "OnlineBackup": "No",
+                "DeviceProtection": "No",
+                "StreamingTV": "No",
+                "StreamingMovies": "No",
+                "SeniorCitizen": 0,
+                "Partner": "No",
+                "Dependents": "No",
+                "TARGET": "No"
+            }
+            df_raw = pd.DataFrame([raw_data])
+            df_raw = add_rfm_features(df_raw)
+            df_raw = add_behavioral_features(df_raw)
+            df_processed = encode_and_scale(df_raw, fit=False)
+            
+            # Align with trained feature columns exactly
+            final_row = {}
+            for col in feat_cols:
+                if col in df_processed.columns:
+                    final_row[col] = df_processed[col].iloc[0]
+                else:
+                    final_row[col] = 0
+            
+            return pd.DataFrame([final_row])
 
         inp   = build_input()
         proba = float(model.predict_proba(inp)[0, 1])
@@ -522,7 +523,17 @@ elif page == "📤 Campaign Export":
     exp_cols = [c for c in ["customerID","segment_name","churn_probability",
                               "tenure","MonthlyCharges","Contract",
                               "recommended_action"] if c in export_df.columns]
-    st.dataframe(export_df[exp_cols], use_container_width=True)
+    
+    gb_export = GridOptionsBuilder.from_dataframe(export_df[exp_cols])
+    gb_export.configure_pagination(paginationAutoPageSize=True)
+    grid_options_export = gb_export.build()
+    AgGrid(
+        export_df[exp_cols],
+        gridOptions=grid_options_export,
+        enable_enterprise_modules=False,
+        fit_columns_on_grid_load=True,
+        theme="streamlit"
+    )
 
     col_csv, col_json = st.columns(2)
     with col_csv:
