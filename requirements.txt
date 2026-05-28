@@ -50,7 +50,8 @@ passlib[bcrypt]==1.7.4
 python-multipart==0.0.9
 
 # ── Uplift Modeling ────────────────────────────────────────────────────────────
-causalml==0.14.1
+# causalml is bypassed using a custom CustomTLearner to allow compile-free deploys
+
 
 # ── Monitoring ─────────────────────────────────────────────────────────────────
 evidently==0.4.15
