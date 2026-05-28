@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1
+
 FROM python:3.11-slim
 
 # Create a non-privileged user (UID 1000) for Hugging Face security compliance
