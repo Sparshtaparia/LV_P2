@@ -77,7 +77,7 @@ Using the IBM Telco Churn dataset scaled to 10,000 customers via synthetic Faker
 
 The system container connections are detailed in the diagram below:
 
-![Architecture Diagram](./public/System Architecture Diagram.png)
+![Architecture Diagram](./public/System_Architecture_Diagram.png)
 
 ---
 
