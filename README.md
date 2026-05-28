@@ -1,3 +1,12 @@
+---
+title: Churn Api
+emoji: 🐨
+colorFrom: purple
+colorTo: green
+sdk: docker
+pinned: false
+---
+
 # 🔮 Customer Churn Prediction & Retention Intelligence Platform
 **Advanced Classification, Segmentation & Personalized Retention Strategy Optimization**
 *LogicVeda Technologies · Project Code: lv2-2026-03-02 · Version 4.0 – Complete Production-Grade Edition*
