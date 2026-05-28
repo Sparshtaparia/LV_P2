@@ -1,0 +1,2 @@
+apache-airflow==2.8.2
+confluent-kafka==2.3.0
