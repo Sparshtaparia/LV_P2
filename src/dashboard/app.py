@@ -169,7 +169,10 @@ def load_model():
         m = joblib.load(CALIBRATED_MODEL)
         f = joblib.load(FEATURE_COLS_PATH)
         return m, f
-    except:
+    except Exception as e:
+        import traceback
+        st.error(f"Error loading model: {e}")
+        st.code(traceback.format_exc())
         return None, None
 
 # ─── Sidebar navigation ───────────────────────────────────────────────────────
