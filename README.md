@@ -1,6 +1,5 @@
 # 🔮 Customer Churn Prediction & Retention Intelligence Platform
 **Advanced Classification, Segmentation & Personalized Retention Strategy Optimization**
-*LogicVeda Technologies · Project Code: lv2-2026-03-02 · Version 4.0 – Complete Production-Grade Edition*
 
 ---
 
@@ -9,8 +8,7 @@
 * **Subtitle:** Advanced Classification, Segmentation & Personalized Retention Strategy Optimization
 * **Author:** LogicVeda
 * **Prepared For:** LogicVeda – Data Science & Machine Learning Domain
-* **Date:** March 2026
-* **Project Code:** `lv2-2026-03-02`
+* **Date:** March-May 2026
 * **Version:** 4.0 (Production-Grade Release)
 
 ---
@@ -77,52 +75,9 @@ Using the IBM Telco Churn dataset scaled to 10,000 customers via synthetic Faker
 
 ## 🏗️ Architecture & Container Layout
 
-The system container connections are detailed in the Mermaid diagram below:
+The system container connections are detailed in the diagram below:
 
-```mermaid
-graph TD
-    subgraph Client Layer
-        A[Streamlit Dashboard]
-        B[API Clients / Swagger Docs]
-    end
-
-    subgraph Service Layer
-        C[FastAPI Inference Service]
-        D[JWT Authentication / RBAC]
-    end
-
-    subgraph Storage & Feature Layer
-        E[(SQLite Database)]
-        F[Feast Feature Store]
-        G[(Parquet Offline Store)]
-    end
-
-    subgraph Training & MLOps Layer
-        H[MLflow Registry]
-        I[Optuna Hyperparameter Tuner]
-        J[Airflow Retraining Pipeline]
-    end
-
-    subgraph External & Monitoring
-        K[Kafka Consumer/Producer]
-        L[Evidently AI Drift Detector]
-        M[Prometheus / Grafana]
-    end
-
-    A -->|Requests Predictions| C
-    B -->|REST API Calls| C
-    C -->|Validates Token| D
-    C -->|Reads Features| F
-    F -->|Fetches Data| G
-    E -->|Prepares Inputs| G
-    J -->|Daily Run| E
-    J -->|Triggers Tuning| I
-    I -->|Saves Best Weights| H
-    C -->|Loads Calibrated Model| H
-    K -->|Simulates Events| E
-    L -->|Compares Reference| G
-    C -->|Exposes Metrics| M
-```
+![Architecture Diagram](./public/System Architecture Diagram.png)
 
 ---
 
